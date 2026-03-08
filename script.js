@@ -1,69 +1,80 @@
-const inputs = document.querySelectorAll('.qty-input');
-const rateInput = document.getElementById('basePrice');
-const literDisplay = document.getElementById('totalLiters');
-const priceDisplay = document.getElementById('totalPrice');
+// Load Data
+let milkData = JSON.parse(localStorage.getItem('milkLogs')) || [];
+let pricePerLiter = localStorage.getItem('milkPrice') || 0;
 
-function calculate() {
-    let totalLiters = 0;
-    const ratePerLiter = parseFloat(rateInput.value) || 0;
+// Set default date to today in the input
+const dateInput = document.getElementById('entry-date');
+const today = new Date().toISOString().split('T')[0];
+dateInput.value = today;
 
-    inputs.forEach(input => {
-        const bottleSize = parseFloat(input.getAttribute('data-size'));
-        const quantity = parseFloat(input.value) || 0;
-        totalLiters += (bottleSize * quantity);
-    });
+document.getElementById('milk-price').value = pricePerLiter;
 
-    const totalPrice = totalLiters * ratePerLiter;
-    literDisplay.innerText = totalLiters.toFixed(1);
-    priceDisplay.innerText = Math.round(totalPrice).toLocaleString('en-IN');
+// Listen for price changes
+document.getElementById('milk-price').addEventListener('input', (e) => {
+    pricePerLiter = e.target.value;
+    localStorage.setItem('milkPrice', pricePerLiter);
+    renderReport();
+});
+
+function saveEntry() {
+    const selectedDate = dateInput.value;
+    const morn = parseFloat(document.getElementById('morning-input').value) || 0;
+    const eve = parseFloat(document.getElementById('evening-input').value) || 0;
+
+    if (!selectedDate) return alert("Please select a date!");
+
+    // Find if the date already exists in our records
+    const existingIndex = milkData.findIndex(item => item.date === selectedDate);
+
+    if (existingIndex > -1) {
+        milkData[existingIndex] = { date: selectedDate, morning: morn, evening: eve };
+    } else {
+        milkData.push({ date: selectedDate, morning: morn, evening: eve });
+    }
+
+    // Sort data by date so the table looks organized
+    milkData.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    localStorage.setItem('milkLogs', JSON.stringify(milkData));
+    
+    // Clear inputs for next use
+    document.getElementById('morning-input').value = "";
+    document.getElementById('evening-input').value = "";
+    
+    renderReport();
+    alert(`Success: Entry for ${selectedDate} updated!`);
 }
 
-function generateReceipt() {
-    const receiptCard = document.getElementById('receipt-card');
-    const receiptList = document.getElementById('receipt-list');
-    const receiptTotal = document.getElementById('receipt-grand-total');
-    const rate = parseFloat(rateInput.value) || 0;
-    
-    receiptList.innerHTML = ''; // Clear previous data
-    let hasData = false;
+function renderReport() {
+    const tbody = document.getElementById('report-body');
+    tbody.innerHTML = "";
+    let totalLiters = 0;
 
-    inputs.forEach(input => {
-        const qty = parseFloat(input.value) || 0;
-        if (qty > 0) {
-            hasData = true;
-            const size = input.getAttribute('data-size');
-            const itemTotal = (qty * parseFloat(size)) * rate;
-            
-            const itemRow = document.createElement('div');
-            itemRow.style.display = 'flex';
-            itemRow.style.justifyContent = 'space-between';
-            itemRow.style.padding = '8px 0';
-            itemRow.innerHTML = `
-                <span>${size}L Bottle (x${qty})</span>
-                <span>₹${Math.round(itemTotal).toLocaleString('en-IN')}</span>
-            `;
-            receiptList.appendChild(itemRow);
-        }
+    milkData.forEach(entry => {
+        const dayTotal = entry.morning + entry.evening;
+        totalLiters += dayTotal;
+
+        const row = `<tr>
+            <td>${entry.date}</td>
+            <td>${entry.morning}L</td>
+            <td>${entry.evening}L</td>
+            <td><strong>${dayTotal.toFixed(1)}L</strong></td>
+        </tr>`;
+        tbody.innerHTML += row;
     });
 
-    if (hasData) {
-        receiptCard.style.display = 'block';
-        receiptTotal.innerText = '₹' + priceDisplay.innerText;
-        receiptCard.scrollIntoView({ behavior: 'smooth' });
-    } else {
-        alert("Please enter quantities before generating a receipt.");
+    const totalCost = totalLiters * pricePerLiter;
+    document.getElementById('weekly-liters').innerText = totalLiters.toFixed(2);
+    document.getElementById('weekly-cost').innerText = totalCost.toFixed(2);
+}
+
+function resetCycle() {
+    if(confirm("This will clear ALL current entries and reset the bill to $0. Continue?")) {
+        milkData = [];
+        localStorage.setItem('milkLogs', JSON.stringify(milkData));
+        renderReport();
     }
 }
 
-function clearAll() {
-    inputs.forEach(input => input.value = '');
-    document.getElementById('receipt-card').style.display = 'none';
-    calculate();
-}
-
-inputs.forEach(input => {
-    input.addEventListener('input', calculate);
-});
-
-rateInput.addEventListener('input', calculate);
-calculate();
+// Initial render
+renderReport();
